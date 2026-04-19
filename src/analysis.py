@@ -21,6 +21,8 @@ from scipy.integrate import quad
 
 data_folder =Path("../data/")
 generate_frec_plots = False
+generate_fit_plots = False
+answer_verbose = False
 
 def extract_data_from_mp3(path):
     """
@@ -72,15 +74,16 @@ def data_analysis():
 
     mp3_files = list(data_folder.glob("*.mp3"))
     
+    #init array with results
+    results=[]
+    
     #big data extraction for each file
     for file_path in mp3_files:
         # extract time data of popping events
-        print("Processing:", file_path.name)
+        if answer_verbose:
+            print("Processing:", file_path.name)
         timestamp_events = extract_data_from_mp3(file_path)
         num_pops = len(timestamp_events)
-        
-        # create time-array for plotting
-        fit_time = np.linspace(min(timestamp_events),max(timestamp_events),1024)
         
         # Call for fit on right truncated gaussian
         fit_parameters=fit_trunc_gaussian(timestamp_events)
@@ -88,28 +91,36 @@ def data_analysis():
         # Determine number of kernels missed due to cutoff by using CDF
         num_missed = int(num_pops/norm.cdf((np.max(timestamp_events)-fit_parameters[0])/fit_parameters[1])-num_pops)
         
+        #optional histogram plotting
+        if generate_fit_plots:
+            # create time-array for plotting
+            fit_time = np.linspace(min(timestamp_events),max(timestamp_events),1024)
         
-        #plot histogram
-        plt.hist(timestamp_events,bins=20,density=True,label="Registered Pops")
+            #plot histogram
+            plt.hist(timestamp_events,bins=20,density=True,label="Registered Pops")
  
-        #plot fit
-        plt.title(f"Popping against time for {file_path.stem}",)
-        plt.xlabel("Time to Pop in s")
-        plt.ylabel("Frequency of Pops")
-        plt.plot(fit_time,trunc_gaussian(fit_time,fit_parameters),label=f"Best Fit for \n mu={fit_parameters[0]:.2f}, sig={fit_parameters[1]:.2f}")
-        plt.legend()
-        plt.show()
+            #plot fit
+            plt.title(f"Popping against time for {file_path.stem}",)
+            plt.xlabel("Time to Pop in s")
+            plt.ylabel("Frequency of Pops")
+            plt.plot(fit_time,trunc_gaussian(fit_time,fit_parameters),label=f"Best Fit for \nmu={fit_parameters[0]:.2f}, sig={fit_parameters[1]:.2f}")
+            plt.legend()
+            plt.show()
         
         # We can estimate that ~9%  of kernes do not pop at all. We can now estimate
-        # total kernals, popped kernels and unpopped kernels
-        fraction_unpoppable=0.09
-        num_total = int((num_pops+num_missed)/(1-fraction_unpoppable))
-        print("# Total Kernels: ",num_total)
-        print("# Popped Kernels: ",num_pops,"(",round(num_pops/num_total*100,1),"%)")
-        print("# Unpopped Kernels: ",num_total-num_pops,"(",round(num_pops/num_total*100,1),"%)\nOf which are:")
-        print("\t Missed Kernels: ",num_missed,"(",round(num_missed/num_total*100,1),"%)")
-        print("\t Unpoppable Kernels: ",num_total-num_missed-num_pops,"(",round((num_total-num_missed-num_pops)/num_total*100,1),"%)")
-    
+        # total kernals, popped kernels and unpopped kernels. Print only if needed
+        
+        if answer_verbose:
+            fraction_unpoppable=0.09
+            num_total = int((num_pops+num_missed)/(1-fraction_unpoppable))
+            print("# Total Kernels: ",num_total)
+            print("# Popped Kernels: ",num_pops,"(",round(num_pops/num_total*100,1),"%)")
+            print("# Unpopped Kernels: ",num_total-num_pops,"(",round(num_pops/num_total*100,1),"%)\nOf which are:")
+            print("\t Missed Kernels: ",num_missed,"(",round(num_missed/num_total*100,1),"%)")
+            print("\t Unpoppable Kernels: ",num_total-num_missed-num_pops,"(",round((num_total-num_missed-num_pops)/num_total*100,1),"%)")
+        
+        #save important values from dataset
+        results.append([num_pops, num_missed])
     pass
 
 def fit_trunc_gaussian(timestamp_events):
@@ -149,8 +160,8 @@ def trunc_gaussian(x,parameters):
     ----------
     x : TYPE
         array of x-axis values
-    parameters : TYPE
-        mean and sigma of the gaussian
+    parameters : tuple
+        (mean, sigma)
     Returns
     -------
     TYPE
@@ -168,9 +179,9 @@ def negative_log_likelihood(parameters,timestamps_events):
 
     Parameters
     ----------
-    parameters : TYPE
-        mean and sigma
-    timestamps_events : TYPE
+    parameters : tuple
+        (mean, sigma)
+    timestamps_events : array
         timestamp data
 
     Returns
