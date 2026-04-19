@@ -17,12 +17,11 @@ from scipy.stats import norm
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 from pathlib import Path
-from scipy.integrate import quad
 
 data_folder =Path("../data/")
-generate_frec_plots = False
-generate_fit_plots = False
-answer_verbose = False
+generate_frec_plots = True
+generate_fit_plots = True
+answer_verbose = True
 
 def extract_data_from_mp3(path):
     """
@@ -41,15 +40,15 @@ def extract_data_from_mp3(path):
     """
     
     # Define Kernel size for energy calc
-    frame_length=64
+    frame_length=256
     hop_length=frame_length
     
     # Loading mp3 and introducing rolling average of waveenergy
     waveform, sample_rate = librosa.load(path)
     energy = librosa.feature.rms(y=waveform,frame_length=frame_length, hop_length=hop_length)[0]
     
-    # finding peaks using scipy. Choose peak-threshhold of 4 times over mean
-    threshhold = np.mean(energy) * 4
+    # finding peaks using scipy. Choose peak-threshhold of 5 times over mean
+    threshhold = np.mean(energy) * 5
     peaks = find_peaks(energy, height=threshhold)[0]
     times = librosa.frames_to_time(peaks, sr=sample_rate, hop_length=hop_length)
     
@@ -70,15 +69,18 @@ def data_analysis():
     -------
     None
     """
-    # find my mp3 files
-
-    mp3_files = list(data_folder.glob("*.mp3"))
+    # read experimental data from file
+    data = np.genfromtxt(data_folder/"data.csv", delimiter=",", dtype=None, encoding="utf-8")
+    data = np.atleast_1d(data)
     
     #init array with results
     results=[]
     
-    #big data extraction for each file
-    for file_path in mp3_files:
+    # extract everything for each row in data
+    for row in data:
+        filename, num_total_exp, num_missed_exp = row
+        
+        file_path = data_folder / filename
         # extract time data of popping events
         if answer_verbose:
             print("Processing:", file_path.name)
@@ -111,8 +113,8 @@ def data_analysis():
         # total kernals, popped kernels and unpopped kernels. Print only if needed
         
         if answer_verbose:
-            fraction_unpoppable=0.09
-            num_total = int((num_pops+num_missed)/(1-fraction_unpoppable))
+
+            num_total = num_total_exp
             print("# Total Kernels: ",num_total)
             print("# Popped Kernels: ",num_pops,"(",round(num_pops/num_total*100,1),"%)")
             print("# Unpopped Kernels: ",num_total-num_pops,"(",round(num_pops/num_total*100,1),"%)\nOf which are:")
@@ -120,7 +122,7 @@ def data_analysis():
             print("\t Unpoppable Kernels: ",num_total-num_missed-num_pops,"(",round((num_total-num_missed-num_pops)/num_total*100,1),"%)")
         
         #save important values from dataset
-        results.append([num_pops, num_missed])
+        results.append([num_pops, num_missed,num_total_exp, num_missed_exp])
     pass
 
 def fit_trunc_gaussian(timestamp_events):
