@@ -17,6 +17,7 @@ from scipy.stats import norm
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 from pathlib import Path
+from scipy.integrate import quad
 
 data_folder =Path("../data/")
 generate_frec_plots = False
@@ -44,9 +45,6 @@ def extract_data_from_mp3(path):
     # Loading mp3 and introducing rolling average of waveenergy
     waveform, sample_rate = librosa.load(path)
     energy = librosa.feature.rms(y=waveform,frame_length=frame_length, hop_length=hop_length)[0]
-    
-    
-    
     
     # finding peaks using scipy. Choose peak-threshhold of 4 times over mean
     threshhold = np.mean(energy) * 4
@@ -76,16 +74,20 @@ def data_analysis():
     
     #big data extraction for each file
     for file_path in mp3_files:
-        
         # extract time data of popping events
         print("Processing:", file_path.name)
         timestamp_events = extract_data_from_mp3(file_path)
+        num_pops = len(timestamp_events)
         
         # create time-array for plotting
         fit_time = np.linspace(min(timestamp_events),max(timestamp_events),1024)
         
         # Call for fit on right truncated gaussian
         fit_parameters=fit_trunc_gaussian(timestamp_events)
+        
+        # Determine number of kernels missed due to cutoff by using CDF
+        num_missed = int(num_pops/norm.cdf((np.max(timestamp_events)-fit_parameters[0])/fit_parameters[1])-num_pops)
+        
         
         #plot histogram
         plt.hist(timestamp_events,bins=20,density=True,label="Registered Pops")
@@ -96,8 +98,17 @@ def data_analysis():
         plt.ylabel("Frequency of Pops")
         plt.plot(fit_time,trunc_gaussian(fit_time,fit_parameters),label=f"Best Fit for \n mu={fit_parameters[0]:.2f}, sig={fit_parameters[1]:.2f}")
         plt.legend()
-        
         plt.show()
+        
+        # We can estimate that ~9%  of kernes do not pop at all. We can now estimate
+        # total kernals, popped kernels and unpopped kernels
+        fraction_unpoppable=0.09
+        num_total = int((num_pops+num_missed)/(1-fraction_unpoppable))
+        print("# Total Kernels: ",num_total)
+        print("# Popped Kernels: ",num_pops,"(",round(num_pops/num_total*100,1),"%)")
+        print("# Unpopped Kernels: ",num_total-num_pops,"(",round(num_pops/num_total*100,1),"%)\nOf which are:")
+        print("\t Missed Kernels: ",num_missed,"(",round(num_missed/num_total*100,1),"%)")
+        print("\t Unpoppable Kernels: ",num_total-num_missed-num_pops,"(",round((num_total-num_missed-num_pops)/num_total*100,1),"%)")
     
     pass
 
